@@ -1,0 +1,35 @@
+<!--
+/* ============================================================
+ *
+ *  機能ID:FNC-006
+ *  機能名：checkSize
+ *   
+ *  画面表示時に画面サイズを取得し、画面縦が推奨サイズより小さい場合アラートを表示。
+ *
+ *  @requires spi3_jquery-1.11.2.min.js
+ *
+============================================================== */
+function checkSize() {
+	var sH;
+	
+	//Internet Explorer
+	if (document.all) {
+		sH = document.body.clientHeight;
+	//Firefox等
+	} else {
+		sH = window.innerHeight;
+	}
+
+// 2022/05/06 A-22-0018対応 chiyokawa START
+// // 表示領域の高さが692未満である
+//	if(sH < 692) {
+	// 表示領域の高さが724未満である
+	if(sH < 724) {
+// 2022/05/06 A-22-0018対応 chiyokawa END
+		return false;
+	}
+	
+	return true;
+}
+
+//-->

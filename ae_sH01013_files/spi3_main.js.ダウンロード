@@ -1,0 +1,193 @@
+var maxTime;
+var countdownMaxSec;
+var params = {};
+var data = {};
+var pdata = {
+	firstFlg : false,
+	os : "win"
+};
+
+/*
+ *	初期設定（パラメータセット）
+ */
+var initdata = function (set) {
+	// jsonデータからパラメータセット
+	for(key in set.d){
+		data[key] = set.d[key];
+		params[key] = {};
+		// vitesでない場合
+        if(!data[key].vites_flg) {
+            maxTime = (360 / data[key].pie.angle) * 60;
+            countdownMaxSec = (parseInt(data[key].count.cell1)+parseInt(data[key].count.cell2)+parseInt(data[key].count.cell3)+parseInt(data[key].count.cell4))*parseInt(data[key].count.sec);
+            params[key]["pie"] = data[key].pie;
+        }
+		params[key]["vites_flg"] = data[key].vites_flg;
+		params[key]["type"] = data[key].type;
+		params[key]["step"] = data[key].step;
+		params[key]["count"] = data[key].count;
+		params[key]["e_flg"] = data[key].e_flg;
+	}
+	// パラメータセット
+	if(set["firstFlg"]){
+		pdata["firstFlg"] = set["firstFlg"];
+	}
+	if(set["os"]){
+		pdata["os"] = set["os"];
+	}
+}
+/*
+ *	画面読み込み後、処理実行
+ */
+$(window).load(function(){
+	$(".loader").hide();
+	
+	//各処理を実行開始
+	var length = Object.keys(params).length;	
+	if(length > 0){
+		goset();
+	}
+});
+
+/*
+ *	各処理を実行開始
+ */
+var goset = function(){
+	/*
+	 *	タブ 処理開始（FNC-018）
+	 */
+	$(".tab-contents").tab({
+		vites : params[key].vites_flg
+	});
+
+	// widnow size check（FNC-006）
+	winSizeChk(pdata["firstFlg"],pdata["os"]);
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-022
+	 *	機能名：autoHeight
+	 *	 
+	 *	指定エリアの表示エリアの高さを揃える
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *	@requires spi3_jQueryAutoHeight.js
+	 *
+	============================================================== */
+	$(".answer").each(function(){
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+	$(".choice-answer").each(function(){
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+	$(".which-answer").each(function(){
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+
+	/*
+	 *	radioClick 処理開始（FNC-011）
+	 */
+	$(".contents .answer-input-radio-item").radioClick();
+	$(".which-contents .answer-input-radio-item").radioClick();
+	$(".choice-contents .answer-input-radio-item").radioClick();
+	$(".tab-contents .answer-input-radio-item").tabRadioClick();
+
+	/*
+	 *	text input 入力確認 処理開始（FNC-024）
+	 */
+	$(".tab-contents .answer-input-text-item").textInput();
+
+	// パラメータを取得
+	for(key in params){
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			// 親ウィンドウ存在チェック 処理開始 (FNC-007)
+			$("body").parentChk();
+		}
+
+		/*
+		 *	posttime 処理開始（FNC-014）
+		 */
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			$(document).posttime({
+				start : parseInt(params[key].pie.start),
+				time : 100,
+			});
+		}
+
+		/*
+		 *	timer 処理開始（FNC-015）
+		 */
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			$('#js-timer').timer({
+				seconds : maxTime, //タイムアップまでの秒数
+				width : 100,
+				type : params[key].type,
+				start : parseInt(params[key].pie.start),
+		//		angle : parseInt(params[key].pie.angle),
+				time : parseInt(params[key].pie.time),
+				tm_val : parseInt(params[key].pie.tm_val)
+			});
+		}
+
+		/*
+		 *	nextBtn 処理開始（FNC-012）
+		 */
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			$(".js-nextbtn").nextBtn({
+				eFlg : params[key].e_flg,
+				angle : parseInt(params[key].step.angle),
+				angle_next : parseInt(params[key].step.angle_next)
+			});
+		}
+
+		/*
+		 *	stepView 処理開始（FNC-016）
+		 */
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			$("#js-step").stepView({
+				width : 60,
+				angle : parseInt(params[key].step.angle)
+			});
+		}
+
+		/*
+		 *	countdownBar 処理開始（FNC-017）
+		 */
+		// vitesでない場合
+		if(!params[key].vites_flg) {
+			$(".countdown-bar").countdownBar({
+				cell1 : parseInt(params[key].count.cell1),
+				cell2 : parseInt(params[key].count.cell2),
+				cell3 : parseInt(params[key].count.cell3),
+				cell4 : parseInt(params[key].count.cell4),
+				seconds : parseInt(params[key].count.sec),
+				maxSeconds : countdownMaxSec,
+				vites : params[key].vites_flg,
+				eFlg : params[key].e_flg,
+				angle : parseInt(params[key].step.angle),
+				angle_next : parseInt(params[key].step.angle_next),
+				tm_val : parseInt(params[key].pie.tm_val),
+				start : parseInt(params[key].pie.start)
+			});
+		// vitesの場合
+		} else {
+			$(".vites_list").eq(key).find(".countdown-bar").countdownBar({
+				cell1 : parseInt(params[key].count.cell1),
+				cell2 : parseInt(params[key].count.cell2),
+				cell3 : parseInt(params[key].count.cell3),
+				cell4 : parseInt(params[key].count.cell4),
+				seconds : parseInt(params[key].count.sec),
+				maxSeconds : countdownMaxSec,
+				vites : params[key].vites_flg,
+				eFlg : params[key].e_flg,
+				angle : parseInt(params[key].step.angle),
+				angle_next : parseInt(params[key].step.angle_next)
+			});
+		}
+
+	}
+}

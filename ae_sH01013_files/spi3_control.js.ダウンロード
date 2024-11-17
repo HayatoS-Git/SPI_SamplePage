@@ -1,0 +1,30 @@
+// 画面遷移「検査終了」
+// 引数１: end_url 遷移先JSP名
+// 引数２: test_no 検査番号
+// 引数３: test_name テスト名称（検査終了画面用）
+function sendEndUrl(end_url, test_no, test_name) {
+	close_flg = "0";
+	var p = window.location.search;
+	window.parent.close();
+	window.top.opener.location.href = end_url + p + "&testNo=" + test_no + "&testName=" + test_name;
+}
+
+// 画面遷移「検査終了」
+// 引数１: end_url 遷移先JSP名
+function sendEndUrlWithoutTestParam(end_url) {
+	close_flg = "0";
+	var p = window.location.search;
+	window.parent.close();
+	window.top.opener.location.href = end_url + p;
+}
+
+// 画面遷移「WEB能力個別検査終了」
+// 引数１: end_url 遷移先JSP名
+// 引数２: lang_div 言語非言語区分
+function sendEndWebUrl(end_url, lang_div) {
+	close_flg = "0";
+	var p = window.location.search;
+	window.parent.close();
+	window.top.opener.location.href = end_url + p + "&enforcementTestDiv=" + lang_div ;
+}
+

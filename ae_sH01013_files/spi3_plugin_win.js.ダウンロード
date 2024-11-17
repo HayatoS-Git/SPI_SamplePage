@@ -1,0 +1,75 @@
+/* ============================================================
+ *
+ *  機能ID:FNC-001
+ *  機能名：キーボード入力制御
+ *   
+ *  キーボード入力制御を行い、指定キーを操作不可とする。
+ *  Windowsの場合
+ *
+ *  @requires spi3_jquery-1.11.2.min.js
+ *	@requires spi3_plugin_win.js
+ *	@requires spi3_plugin_mac.js
+ *
+============================================================== */
+(function ($) {
+	"use strict";
+
+	/*
+	 * keyCheck処理
+	 */
+	$.fn.keyCheck = function () {
+		return this.each(function () {
+			// キーが押された場合
+			$(window).keydown(function (event) {
+				var keyCode = event.keyCode;
+				var ctrlKey = event.ctrlKey;
+				var metaKey = event.metaKey;
+				var shiftKey = event.shiftKey;
+				var altKey = event.altKey;
+				var obj = event.target;
+				// 指定キーだった場合制御
+				if(  keyCode ==  112 // F1
+					|| keyCode ==  113 // F2
+					|| keyCode ==  114 // F3
+					|| keyCode ==  115 // F4
+					|| keyCode ==  116 // F5
+					|| keyCode ==  117 // F6
+					|| keyCode ==  118 // F7
+					|| keyCode ==  119 // F8
+					|| keyCode ==  120 // F9
+					|| keyCode ==  121 // F10
+					|| keyCode ==  122 // F11
+					|| keyCode ==  123 // F12
+					|| keyCode ==  18  // alt
+				){
+					return false;
+				}
+
+				if ( (altKey && keyCode ==  37)               // alt + ←
+				) {
+					return false;
+				}
+
+				if ( (ctrlKey && keyCode ==  48)               // ctrl + 0 有効
+				) {
+				} else if ( (ctrlKey)               // ctrl
+				) {
+					return false;
+				}
+
+				// BackSpase
+				if(keyCode == 8){
+					// text入力エリアでない場合制御
+					if((obj.tagName == "INPUT" && obj.type == "text") || obj.tagName == "TEXTAREA"){
+						// 入力できる場合は制御しない
+						if(!obj.readOnly && !obj.disabled){
+							return true;
+						}
+					}
+					return false;
+				}
+			});
+		});
+	};
+
+})(jQuery);

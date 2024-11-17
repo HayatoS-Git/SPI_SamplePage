@@ -1,0 +1,25 @@
+@charset "shift_jis";
+/* CSS Document */
+
+body {
+  font-family: "游ゴシック Medium", "Yu Gothic Medium";
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: "游ゴシック Medium", "Yu Gothic Medium";
+}
+
+::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 10px;
+  background-color: #f1f1f1;
+  border-left: #dddddd solid 1px;
+  border-right: #dddddd solid 1px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  width: 8px;
+}

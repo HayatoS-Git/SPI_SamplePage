@@ -1,0 +1,5 @@
+@charset "shift_jis";
+
+body * {
+	display : none !important;
+}

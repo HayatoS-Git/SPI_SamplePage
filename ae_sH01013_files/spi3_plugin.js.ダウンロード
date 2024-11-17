@@ -1,0 +1,1582 @@
+var formSubmit;
+var swal;
+var swalInit;
+var winSizeChk;
+
+(function ($) {
+	"use strict";
+
+	var postTime;
+
+	var timerStop = {
+		stop() {},
+	}
+	var colbarTimerStart;
+	var ptimer;
+	var lastTimeout;
+
+	var timeup_flg = false;
+	var click_flg = false;
+	var timer_stop_flg = false;
+
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-
+	 *  機能名：superInterval
+	 *   
+	 *  superInterval 処理
+	 *  バックグランドでも起動するタイマー
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	var superInterval = function (cb, interval=1000, ...args) {
+		try {
+			const code = `self.addEventListener('message', msg=>{setInterval(()=>self.postMessage(null), msg.data)})`
+			const w = new Worker(`data:text/javascript;base64,${btoa(code)}`)
+			w.onmessage = () => cb(...args)
+			w.postMessage(interval)
+			return {stop:()=>w.terminate()}
+		} catch(_){
+			// 実装の問題またはCSPによる拒否などで Worker が使えなければ普通の setInterval を使う
+			const id = setInterval(cb, interval, ...args)
+			return {stop:()=>clearInterval(id)}
+		}
+	}
+
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-009
+	 *  機能名：formSubmit
+	 *   
+	 *  form submit 処理
+	 *  ローダーを表示後、指定の遷移先へsubmit実行
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	formSubmit = function (form) {
+		if (!click_flg) {
+			click_flg = true;
+			// loaderを表示
+			setTimeout(function () {
+				$(".loader").empty().prepend('<img src="../parts/img/spi3_loading.gif">');
+			});
+			$(".loader").show();
+			// submit実行
+			form.submit();
+		}
+		return false;
+	}
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-023
+	 *  機能名：dialog
+	 *  
+	 *  dialog表示処理
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	/*
+	 *  dialog 初期処理
+	 */
+	swalInit = function () {
+		$("body").append('<div class="sweet-overlay" tabindex="-1"></div>');
+		var html = '<div class="sweet-alert showSweetAlert visible" tabindex="-1" data-custom-class="" data-has-cancel-button="false" data-has-confirm-button="true" data-allow-ouside-click="false" data-has-done-function="true" data-animation="none" data-timer="null"><h2>確認</h2><p>無効な操作が行なわれました。</p><button class="confirm" tabindex="-1">OK</button><button class="cancel" tabindex="0">Cancel</button></div>';
+		$("body").append(html);
+		$(".sweet-alert .cancel").on("click", function () {
+			$(".sweet-overlay").hide();
+			$(".sweet-alert").hide();
+		});
+	}
+	/*
+	 *  dialog 表示実行処理
+	 */
+	swal = function (options, func) {
+		// パラメータセット
+		var defaults = {
+			title: "確認",
+			text: "無効な操作が行なわれました。",
+			type: "warning",
+			showCancelButton: false,
+			confirmButtonColor: "#D0D0D0",
+			confirmButtonText: "OK",
+			cancelButtonText: "いいえ",
+			closeOnConfirm: true
+		};
+		var config = $.extend(defaults, options);
+		// パラメータからタイトルを表示
+		$(".sweet-alert h2").text(config.title);
+		// パラメータからテキストを表示
+		$(".sweet-alert p").html(config.text);
+		// パラメータから確認ボタンを表示
+		$(".sweet-alert .confirm").text(config.confirmButtonText);
+		$(".sweet-alert .confirm").css({
+			"background-color": config.confirmButtonColor
+		});
+		// パラメータにcall back functionがセットされていた場合
+		if (func) {
+			$(".sweet-alert .confirm").unbind();
+			$(".sweet-alert .confirm").bind("click", func);
+		}
+		// パラメータからキャンセルボタンを表示
+		$(".sweet-alert .cancel").text(config.cancelButtonText);
+		// パラメータのキャンセルボタン表示フラグがtrueだった場合、キャンセルボタン表示
+		if (config.showCancelButton) {
+			$(".sweet-alert .cancel").show();
+		} else {
+			$(".sweet-alert .cancel").hide();
+		}
+		// overlay表示
+		$(".sweet-overlay").css({
+			"display": "block"
+		});
+		// ダイアログ表示
+		$(".sweet-alert").css({
+			"display": "block",
+			"margin-top": "-119px"
+		});
+		// ボタンの初期のフォーカスをセット
+		// パラメータのキャンセルボタン表示フラグがtrueだった場合、キャンセルボタンをフォーカス
+		if (config.showCancelButton) {
+			$(".sweet-alert .confirm").blur();
+			$(".sweet-alert .cancel").focus();
+		// パラメータのキャンセルボタン表示フラグがfalseだった場合、確認ボタンをフォーカス
+		} else {
+			$(".sweet-alert .cancel").blur();
+			$(".sweet-alert .confirm").focus();
+		}
+	};
+	/*
+	 *  画面初期表示時にダイアログ初期処理実行
+	 */
+	$(window).load(function () {
+		swalInit();
+	});
+
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-006
+	 *  機能名：widnow size check
+	 *   
+	 *  画面サイズチェックを行い,サイズが小さい場合ダイアログを表示
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *  @requires spi3_control_item.js
+	 *
+	============================================================== */
+	winSizeChk = function (flg, os) {
+		// flg がtrueだった場合、画面サイズチェック処理を実行
+		if (flg) {
+			// chkSize 画面サイズチェック
+			var chkSize = checkSize();
+			// 画面サイズチェックを行い,false（画面サイズエラー）だった場合
+			if (!chkSize) {
+				// Windowsの場合
+				if (os == "win") {
+					// swal ダイアログ呼び出し
+					swal({
+						title: "確認",
+// A-22-0090 2022/12/09 T.Chiyokawa 変更 START
+//						text: "<b>ご利用ブラウザの拡大設定が100%となっていない、<br>または全画面表示となっていない可能性があります</b><br><br><b>【Internet Explorerの場合】</b><br>Ctrl+0[0 を わ]キーを押下<br><br><b>【Microsoft Edge・Google Chromeの場合】</b><br>Ctrl+0[0 を わ]キーを押下し、<br>右上の最大化ボタンを押下",
+						text: "<b>ご利用ブラウザの拡大設定が100%となっていない、<br>または全画面表示となっていない可能性があります<br><br>Microsoft Edge・Google Chromeをご利用の場合以下の操作をお試しください。</b><br>Ctrl+0[0 を わ]キーを押下し、右上の最大化ボタンを押下",
+// A-22-0090 2022/12/09 T.Chiyokawa 変更 END
+						type: "warning",
+						showCancelButton: false,
+						confirmButtonColor: "#D0D0D0",
+						confirmButtonText: "OK",
+						closeOnConfirm: true
+					},
+					function () {
+						$(".sweet-overlay").hide();
+						$(".sweet-alert").hide();
+					});
+				// Windows以外（Mac）の場合
+				} else {
+					// swal ダイアログ呼び出し
+					swal({
+						title: "確認",
+						text: "<b>ご利用ブラウザの拡大設定が100%となっていない、<br>または全画面表示となっていない可能性があります</b><br><br><b>■全画面表示にする</b><br>control + command + F[F は]キーを押下<br><br><b>■拡大設定を100%にする</b><br>command + 0[0 を わ]キーを押下",
+						type: "warning",
+						showCancelButton: false,
+						confirmButtonColor: "#D0D0D0",
+						confirmButtonText: "OK",
+						closeOnConfirm: true
+					},
+					function () {
+						$(".sweet-overlay").hide();
+						$(".sweet-alert").hide();
+					});
+				}
+			}
+		}
+	}
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-011
+	 *  機能名：radioボタンクリック処理
+	 *   
+	 *  ラジオボタンをクリック時、checkの付与、解除の実装
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	/*
+	 *  radioClick
+	 */
+	$.fn.radioClick = function () {
+		return this.each(function () {
+			// radioボタンに該当のlabelをクリック時
+			$(this).find("label").on("click", function () {
+				var $radio = $(this).parent().find('input[type="radio"]');
+				// radioボタンがチェック済だった場合、チェックを外す
+				if ($radio.prop("checked")) {
+					$radio.prop("checked", false);
+				// radioボタンが未チェック時、チェックを付与
+				} else {
+					$radio.prop("checked", true);
+				}
+				return false;
+			});
+		});
+	};
+	/*
+	 *  tabRadioClick
+	 */
+	$.fn.tabRadioClick = function () {
+		return this.each(function () {
+			// radioボタンに該当のlabelをクリック時
+			$(this).find("label").on("click", function () {
+				var $radio = $(this).parent().find('input[type="radio"]');
+				// radioボタンがチェック済だった場合、チェックを外す
+				if ($radio.prop("checked")) {
+					$radio.prop("checked", false);
+				// radioボタンが未チェック時、チェックを付与
+				} else {
+					$radio.prop("checked", true);
+				}
+				// タブ表示を制御するため、answerCheck実行
+				$(this).closest(".main").find(".tab").answerCheck({
+					"tab": true
+				});
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-024
+	 *  機能名：text input 入力確認
+	 *   
+	 *  input textの入力チェックを行い、タブ表示を制御
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.textInput = function () {
+		return this.each(function () {
+			// input textにkey処理が行われた場合
+			$(this).find('input[type="text"]').keyup(function (e) {
+				// タブ表示を制御するため、answerCheck実行
+				$(this).closest(".main").find(".tab").answerCheck({
+					"tab": true
+				});
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *  機能ID:FNC-012
+	 *  機能名：nextBtn
+	 *   
+	 *  nextボタンを押下時、入力チェックを行い、
+	 *  エラーだった場合、メッセージを表示、
+	 *  問題なければ、次の画面へ実行
+	 *
+	 *  @requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.nextBtn = function (options) {
+		// パラメータセット
+		var defaults = {
+			list: ".tab-list",
+			item: ".tab-contents-item",
+			eFlg: false,
+			angle: 0,
+			angle_next: null
+		};
+		var config = $.extend(defaults, options);
+		/*
+		 *  go 画面遷移処理を実行
+		 */
+		var go = function () {
+			//formSubmit処理を実行 (:FNC-009)
+			formSubmit(document.form1);
+		}
+		/*
+		 *  次画面へ実行処理
+		 */
+		var goNextBtn = function () {
+			// 経過時間をパラメータへセット
+			$("#astm").val(postTime);
+			// timer をリセット
+			timerStop.stop();
+			// timeup_flgがtrue もしくは　eFlgがtrueだった場合
+			if (timeup_flg || config.eFlg) {
+				// timeup_flgがtrueだった場合 (時間切れだった場合)
+				if (timeup_flg) {
+					// タイマーグラフを全て塗る
+					$('#js-timer').pie({
+						allpie: 360,
+						endpie: 360,
+						color: "#CCCCCC"
+					});
+				}
+				// eFlgがtrueだった場合 (最終画面だった場合)
+				if (config.eFlg) {
+					// ステップグラフを全て塗る
+					$("#js-step").stepView({
+						width: 60,
+						angle: 360
+					});
+				}
+
+				// timeup_flgがtrue かつ eFlgがfalseだった場合 (最終画面以外だった場合)
+				if (timeup_flg && !config.eFlg) {
+					// ステップグラフを指定の角度(angle_next)塗る
+					if(config.angle_next && config.angle_next > 0){
+						$("#js-step").stepView({
+							width: 60,
+							angle: config.angle + config.angle_next
+						});
+					}
+				}
+
+				// overlay表示
+				$("body").prepend('<div class="overlay"></div>');
+				// 1秒後 go 画面遷移処理を実行
+				setTimeout(go, 1000);
+
+			// timeup_flgがtrueでなく かつ eFlgがtrueでない場合
+			} else {
+				// formSubmit処理を実行 (:FNC-009)
+				formSubmit(document.form1);
+			}
+		};
+		/*
+		 *  処理開始
+		 */
+		return this.each(function () {
+			var $elm = $(this);
+			// tabコンテンツの数を取得
+			var stepAll = $(config.item).size();
+			// next btnをクリック時
+			$elm.on("click", function () {
+				// tab listに付与されているis-endを検索
+				var stepEnd = $(config.list).find(".is-end").size();
+				// 入力完了確認用フラグ
+				var flag = true;
+
+				// ボタン押下時のメッセージを表示するためのtypeを取得
+				var btnType = "";
+				if ($(this).hasClass("js-nextbtn-n")) {
+					btnType = "n";
+				}
+				if ($(this).hasClass("js-nextbtn-ve")) {
+					btnType = "ve";
+				}
+				if ($(this).hasClass("js-nextbtn-ng")) {
+					btnType = "ng";
+				}
+				if ($(this).hasClass("js-nextbtn-a")) {
+					btnType = "a";
+				}
+
+				// tab画面の場合
+				if (stepAll > 0) {
+					// tab画面内全てが入力済みの場合
+					if (stepEnd === stepAll) {
+						flag = true;
+					// tab画面内に未入力があった場合
+					} else {
+						flag = false;
+					}
+				// tab画面以外の場合
+				} else {
+					$(".jq-answer").find(".jq-answer-input").each(function () {
+						var radioName = $(this).find('input[type="radio"]').attr("name");
+						var $inputText = $(this).find('input[type="text"]');
+						// 入力完了確認用フラグがtrueの場合
+						if (flag === true) {
+							// radioボタン入力確認
+							if ($(this).find('input[type="radio"][name="' + radioName + '"]:checked').length) {
+								flag = true;
+							// textエリア入力確認
+							} else if ($inputText.length) {
+								$inputText.each(function () {
+									// textエリアがnullだった場合
+									if ($(this).val() === "") {
+										flag = false;
+									}
+								});
+							// radioボタン、textエリアに問題がない場合
+							} else {
+								flag = false;
+							}
+						}
+					});
+				}
+				// 入力完了確認用フラグがtrueの場合（入力に問題がない場合）
+				if (flag) {
+					// ボタンクリック時ボタン非表示
+					$elm.parent().empty();
+					// 次画面へ実行処理
+					goNextBtn();
+				// 入力完了確認用フラグがfalseの場合（入力に問題があった場合）
+				} else {
+					// btn typeが a だった場合
+					if (btnType === "a") {
+						// swal ダイアログ呼び出し
+						swal({
+							title: "確認",
+							text: "答えていない設問があります。<br>必ずすべてに回答してください。",
+							type: "warning",
+							showCancelButton: false,
+							confirmButtonColor: "#D0D0D0",
+							confirmButtonText: "OK",
+							closeOnConfirm: true
+						},
+						function () {
+							$(".sweet-overlay").hide();
+							$(".sweet-alert").hide();
+						});
+					// btn typeが n だった場合
+					} else if (btnType === "n") {
+						// swal ダイアログ呼び出し
+						swal({
+							title: "確認",
+							text: "回答が入力されていません。<br>そのまま次の問題へ進みますか？",
+							type: "warning",
+							showCancelButton: true,
+							confirmButtonColor: "#D0D0D0",
+							confirmButtonText: "はい",
+							cancelButtonText: "いいえ",
+							closeOnConfirm: true
+						},
+						function () {
+							// ボタンクリック時ボタン非表示
+							$elm.parent().empty();
+							goNextBtn();
+						});
+					// btn typeが ve だった場合
+					} else if (btnType === "ve") {
+						// swal ダイアログ呼び出し
+						swal({
+							title: "確認",
+							text: "表示されているタブのうち回答されていないものが<br>あります。そのまま次の問題へ進みますか？",
+							type: "warning",
+							showCancelButton: true,
+							confirmButtonColor: "#D0D0D0",
+							confirmButtonText: "はい",
+							cancelButtonText: "いいえ",
+							closeOnConfirm: true
+						},
+						function () {
+							// ボタンクリック時ボタン非表示
+							$elm.parent().empty();
+							goNextBtn();
+						});
+					// btn typeが ng だった場合
+					} else if (btnType === "ng") {
+						// swal ダイアログ呼び出し
+						swal({
+							title: "確認",
+							text: "回答が入力されていないものがあります。<br>そのまま次の問題へ進みますか？",
+							type: "warning",
+							showCancelButton: true,
+							confirmButtonColor: "#D0D0D0",
+							confirmButtonText: "はい",
+							cancelButtonText: "いいえ",
+							closeOnConfirm: true
+						},
+						function () {
+							// ボタンクリック時ボタン非表示
+							$elm.parent().empty();
+							goNextBtn();
+						});
+					// btn typeがそれら以外だった場合
+					} else {
+						// swal ダイアログ呼び出し
+						swal({
+							title: "確認",
+							text: "回答が選択されていません。<br>そのまま次の問題へ進みますか？",
+							type: "warning",
+							showCancelButton: true,
+							confirmButtonColor: "#D0D0D0",
+							confirmButtonText: "はい",
+							cancelButtonText: "いいえ",
+							closeOnConfirm: true
+						},
+						function () {
+							// ボタンクリック時ボタン非表示
+							$elm.parent().empty();
+							goNextBtn();
+						});
+					}
+				}
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-013
+	 *	機能名：skipBtn
+	 *	 
+	 *	画面の「スキップ」ボタン押下時、確認ダイアログを表示
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.skipBtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+			// skip btnをクリック時
+			$elm.on("click", function () {
+				// ボタン押下時のメッセージを表示するためのtypeを取得
+				var btnType = "";
+				if ($(this).hasClass("js-nextbtn-p")) {
+					btnType = "p";
+				}
+				if ($(this).hasClass("js-nextbtn-p2")) {
+					btnType = "p2";
+				}
+
+				// btn typeが p だった場合
+				if (btnType === "p") {
+					// swal ダイアログ呼び出し
+					swal({
+						title: "確認",
+						text: "説明を飛ばしますが、よろしいですか？",
+						type: "warning",
+						showCancelButton: true,
+						confirmButtonColor: "#D0D0D0",
+						confirmButtonText: "OK",
+						cancelButtonText: "キャンセル",
+						closeOnConfirm: true
+					},
+					function () {
+						formSubmit(document.form2);
+					});
+				// btn typeが p2 だった場合
+				} else if (btnType === "p2") {
+					// swal ダイアログ呼び出し
+					swal({
+						title: "確認",
+						text: "練習を飛ばしますが、よろしいですか？",
+						type: "warning",
+						showCancelButton: true,
+						confirmButtonColor: "#D0D0D0",
+						confirmButtonText: "OK",
+						cancelButtonText: "キャンセル",
+						closeOnConfirm: true
+					},
+					function () {
+						formSubmit(document.form2);
+					});
+				} else {
+					// formSubmit処理を実行 (:FNC-009)
+					formSubmit(document.form1);
+				}
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-010
+	 *	機能名：goBtn
+	 *	 
+	 *	ボタンクリック時に指定先へSUBMITする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.goBtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+			// btnをクリック時
+			$elm.on("click", function () {
+				// formSubmit処理を実行 (:FNC-009)
+				formSubmit(document.form1);
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-010
+	 *	機能名：backBtn
+	 *	 
+	 *	ボタンクリック時に指定先へSUBMITする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.backBtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+			// btnをクリック時
+			$elm.on("click", function () {
+				var btnType = "";
+				// btn typeが p 以外の場合
+				if (btnType === "p") {} else {
+					//formSubmit処理を実行 (:FNC-009)
+					formSubmit(document.form2);
+				}
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-029
+	 *	機能名：ihbackBtn
+	 *	 
+	 *	ボタンクリック時に指定先へSUBMITする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.ihbackBtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+
+			// btnをクリック時
+			$elm.on("click", function () {
+				var p = window.location.search;
+				if (config.againFlg == "0") {
+					window.top.opener.location.href = config.jsp + p + "&exmn_Rsmp_Div=" + config.againFlg;
+				} else {
+					window.top.opener.location.href = config.jsp + p + "&login_Id=" + config.login_Id;
+				}
+
+				window.parent.close();
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-030
+	 *	機能名：returnbtn
+	 *	 
+	 *	ボタンクリック時に指定先へSUBMITする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.returnbtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+			// btnをクリック時
+			$elm.on("click", function () {
+				document.form1.action = config.return_jsp;
+				//formSubmit処理を実行 (:FNC-009)
+				formSubmit(document.form1);
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-030
+	 *	機能名：setsendbtn
+	 *	 
+	 *	ボタンクリック時に指定先へSUBMITする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.setsendbtn = function (options) {
+		var defaults = {};
+		var config = $.extend(defaults, options);
+		return this.each(function () {
+			var $elm = $(this);
+			// btnをクリック時
+			$elm.on("click", function () {
+				document.form1.action = config.jsp;
+				//formSubmit処理を実行 (:FNC-009)
+				formSubmit(document.form1);
+				return false;
+			});
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-014
+	 *	機能名：posttime
+	 *	 
+	 *	設問回答中、時間を計測し、経過時間を保持
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.posttime = function (options) {
+		// パラメータセット
+		var defaults = {
+			start: 0,
+			time: 1000
+		};
+		var config = $.extend(defaults, options);
+		/*
+		 *	時間を計測
+		 */
+		function setTime() {
+			postTime = postTime + config.time;
+		}
+		/*
+		 *	一定時間おきに計測処理を実行
+		 */
+		function startTimer() {
+			postTime = config.start;
+			ptimer = superInterval(setTime, (config.time));
+		}
+		/*
+		 *	タイマーリセット
+		 */
+		function stopTimer() {
+			ptimer.stop();
+		}
+		startTimer();
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-015
+	 *	機能名：timer
+	 *	 
+	 *	jsonデータから渡されたデータを元にタイマーを描画
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *	@requires spi3_Chart.min.js
+	 *	@requires spi3_excanvas.js
+	 *
+	============================================================== */
+	$.fn.timer = function (options) {
+		//パラメータセット
+		var defaults = {
+			seconds: 60, //全部の秒数
+			type: "N",
+			start: 0,
+			//      angle : 1,
+			time: 20000,
+			tm_val: 600
+		};
+		var config = $.extend(defaults, options);
+		var $elm = $(this);
+		var sec = config.seconds;
+		var allpie = 360;
+		var pie = 0;
+		var start = 0;
+		// typeごとに描画maxサイズをセット
+		var max = 355;
+		if (config.type == "A") {
+			max = 350;
+		} else if (config.type == "N") {
+			max = 355;
+		} else {
+			max = 355;
+		}
+		/*
+		 *	初期描画時間計算
+		 */
+		function firsttimeSet(sta) {
+			var a = 0;
+			var mt = Math.floor(sta / config.time);
+			a = mt * config.time;
+			return a;
+		}
+		/*
+		 *	描画角度計算
+		 */
+		function angleSet(sta) {
+			var a = 0;
+			// typeが A の場合
+			if (config.type == "A") {
+				var sttt = Math.floor(sta / 60000);
+				var mt = Math.floor(config.tm_val / 60);
+				mt = mt - 1;
+				var stmt = sttt / mt;
+				a = Math.round(max * stmt);
+			// typeが N の場合
+			} else if (config.type == "N") {
+				var st = Math.floor(sta / 1000);
+				var tt = Math.floor(config.time / 1000);
+				var sttt = st / tt;
+				var stttm = sttt * max;
+				var mt = Math.floor(config.tm_val / 60);
+				mt = mt * 3;
+				a = Math.round(stttm / mt);
+			}
+			return a;
+		}
+		/*
+		 *	描画処理
+		 */
+		function pieSet() {
+			start = start + config.time;
+			if (start >= (config.tm_val * 1000)) {
+				timeup_flg = true;
+				if (config.type == "A") {
+					pie = 360;
+				} else {
+					pie = max;
+				}
+			} else {
+				timeup_flg = false;
+				pie = angleSet(start);
+			}
+			if (pie <= allpie) {
+				// 描画
+				$elm.pie({
+					allpie: allpie,
+					endpie: pie,
+					color: "#CCCCCC"
+				});
+			}
+		}
+		/*
+		 *	指定時間ごとに描画処理
+		 */
+		function startTimer() {
+			timerStop = superInterval(pieSet, (config.time));
+		}
+		/*
+		 *	タイマーリセット
+		 */
+		function stopTimer() {
+			timerStop.stop();
+		}
+		/*
+		 *	初回タイマー描画&描画開始
+		 */
+		function firstTimer() {
+			if(!timer_stop_flg){
+				//描画処理
+				pieSet();
+				//タイマースタート
+				startTimer();
+			}
+		}
+		// 処理開始
+		return this.each(function () {
+			stopTimer;
+			$elm.pie();
+			// ページ開始時、経過時間があった場合
+			if (config.start > 0) {
+				// 初期描画時間計算
+				start = firsttimeSet(config.start);
+				// 初期描画角度計算
+				pie = angleSet(start);
+				// 初期描画
+				$elm.pie({
+					allpie: allpie,
+					endpie: pie,
+					color: "#CCCCCC"
+				});
+				// 経過時間から描画タイマースタート
+				var st = config.time - (config.start % config.time);
+				setTimeout(firstTimer, st);
+			// ページ開始時、経過時間がない場合
+			} else {
+				// 描画タイマースタート
+				startTimer();
+			}
+		});
+	}
+
+	/*
+	 *	pie 与えられた角度を描画
+	 */
+	$.fn.pie = function (options) {
+		// パラメータセット
+		var defaults = {
+			allpie: 360,
+			endpie: 0,
+			allColor: "#A0A0A0",
+			endColor: "#99FFCC"
+		};
+		var config = $.extend(defaults, options);
+		var getID = $(this).attr("id");
+		var ctx = document.getElementById(getID).getContext("2d");
+		var data = [{
+			value: config.endpie,
+			color: config.endColor
+		}, {
+			value: config.allpie - config.endpie,
+			color: config.allColor
+		}];
+		var chartOptions = {
+			segmentShowStroke: 0,
+			animateRotate: false,
+			showTooltips: false,
+			animateScale: false
+		};
+		new Chart(ctx).Pie(data, chartOptions);
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-018
+	 *	機能名：tab
+	 *	 
+	 *	タブ押下時に画面表示を切り替える
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.tab = function (options) {
+		// パラメータセット
+		var defaults = {
+			contents: ".tab-contents",
+			item: ".tab-contents-item",
+			list: ".tab-list",
+			vites: false
+		};
+		var config = $.extend(defaults, options);
+		var self = $(this).closest(".inner");
+		var citem = $(this).closest(".inner").find(config.list);
+		var currentItem = citem.find(".is-current").attr("href");
+		self.find(config.item).hide();
+		self.find(currentItem).fadeIn(0);
+		var num;
+		var nums = {};
+		// タブクリック時
+		citem.find("a").on("click", function () {
+			// クリックしたタブがactiveでない場合
+			if ($(this).hasClass("is-current")) {} else {
+				// タブ内の回答状況チェック
+				$(this).closest(".main").find(".tab").answerCheck({
+					"tab": true
+				});
+				var before = $(this).parent().parent(config.list).find("a.is-current").parent("li").index();
+				$(this).parent().parent(config.list).find("a.is-current").removeClass("is-current");
+				// タブをactive化
+				$(this).addClass("is-current");
+				// contents非表示
+				$(this).closest(".inner").find(config.item).hide();
+				// vitesの場合
+				if (config.vites) {
+					// contents非表示
+					$(this).closest(".inner").find(".jq-tab-vites").hide();
+				}
+				$(this).closest(".inner").find($(this).attr("href")).fadeIn(250);
+				// vitesの場合
+				if (config.vites) {
+					// paging描画処理
+					num = parseInt($(".page1").text());
+					var current = $(this).parent("li").index();
+					var j = current - before + num;
+					$(".page1").text(j);
+				}
+				// 画面切り替え時、autoHeight処理を再実行
+				$(".answer").each(function () {
+					$(this).find(".jq-autoheight").autoHeight();
+				});
+			}
+			return false;
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-025
+	 *	機能名：answerCheck
+	 *	 
+	 *	回答済みかどうかチェック
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.answerCheck = function (options) {
+		// タブ画面の場合
+		if (options.tab) {
+			// パラメータセット
+			var defaults = {
+				answerInputForm: ".answer-input-form",
+				item: ".tab-contents-item",
+				list: ".tab-list"
+			};
+			var config = $.extend(defaults, options);
+			var citem = $(this).find(config.list);
+			var $currentItem = citem.find(".is-current");
+			var ci = $(this).find(config.list);
+			var currentID = ci.find(".is-current").attr("href");
+			var flag = true;
+			var t = $(this).closest(".main").find(currentID);
+			// 対象inputエリアを取得
+			t.find(config.answerInputForm).each(function () {
+				var radioName = $(this).find('input[type="radio"]').attr("name");
+				var $inputText = $(this).find('input[type="text"]');
+				if (flag === true) {
+					// radioがチェック済みの場合 true
+					if ($(this).find('input[type="radio"][name="' + radioName + '"]:checked').length) {
+						flag = true;
+					// テキストエリアの場合
+					} else if ($inputText.length) {
+						// テキストエリアの入力があるかチェック
+						$inputText.each(function () {
+							// テキストエリアが見入力の場合 false
+							if ($(this).val() === "") {
+								flag = false;
+							}
+						});
+					// radioが未チェックの場合 false
+					} else {
+						flag = false;
+					}
+				}
+			});
+			var endClass = "is-end";
+			// flagがtrueの場合（全入力済みの場合）
+			if (flag === true) {
+				// 入力済みclassをセット
+				if (!$currentItem.hasClass(endClass)) {
+					$currentItem.addClass(endClass);
+					//          $(document).stepCheck();
+				} else {
+					$currentItem.addClass(endClass);
+				}
+			// flagがfalseの場合（未入力があるの場合）
+			} else {
+				// 入力済みclassを解除
+				if ($currentItem.hasClass(endClass)) {
+					$currentItem.removeClass(endClass);
+					//          $(document).stepCheck();
+				} else {
+					$currentItem.removeClass(endClass);
+				}
+			}
+		// タブ画面でない場合
+		} else {
+			// パラメータセット
+			var defaults = {
+				answerInputForm: ".answer-input-form"
+			};
+			var config = $.extend(defaults, options);
+			var $currentItem = $("body");
+			var flag = true;
+			// 対象inputエリアを取得
+			$(".answer-input-form").each(function () {
+				var radioName = $(this).find('input[type="radio"]').attr("name");
+				var $inputText = $(this).find('input[type="text"]');
+				if (flag === true) {
+					// radioがチェック済みの場合 true
+					if ($(this).find('input[type="radio"][name="' + radioName + '"]:checked').length) {
+						flag = true;
+					// テキストエリアの場合
+					} else if ($inputText.length) {
+						$inputText.each(function () {
+							// テキストエリアが見入力の場合 false
+							if ($(this).val() === "") {
+								flag = false;
+							}
+						});
+					// radioが未チェックの場合 false
+					} else {
+						flag = false;
+					}
+				}
+			});
+			var endClass = "is-end";
+			// flagがtrueの場合（全入力済みの場合）
+			if (flag === true) {
+				// 入力済みclassをセット
+				if (!$currentItem.hasClass(endClass)) {
+					$currentItem.addClass(endClass);
+					//          $(document).stepCheck();
+				} else {
+					$currentItem.addClass(endClass);
+				}
+			// flagがfalseの場合（未入力があるの場合）
+			} else {
+				// 入力済みclassを解除
+				if ($currentItem.hasClass(endClass)) {
+					$currentItem.removeClass(endClass);
+					//          $(document).stepCheck();
+				} else {
+					$currentItem.removeClass(endClass);
+				}
+			}
+		}
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-016
+	 *	機能名：stepView
+	 *	 
+	 *	渡されたデータを元にステップを描画
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *	@requires spi3_Chart.min.js
+	 *	@requires spi3_excanvas.js
+	 *
+	============================================================== */
+	$.fn.stepView = function (options) {
+		// パラメータセット
+		var defaults = {
+			allpie: 360,
+			list: "body",
+			angle: 0
+		};
+		var config = $.extend(defaults, options);
+		// ステップ描画
+		$("#js-step").pie({
+			allpie: config.allpie,
+			endpie: config.angle,
+			allColor: "#cccccc",
+			endColor: "#FFFFCC"
+		});
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-017
+	 *	機能名：countdownBar
+	 *	 
+	 *	json形式のデータから渡された値を元にカウントダウンバーを描画。
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.countdownBar = function (options) {
+		// パラメータセット
+		var defaults = {
+			cell1: 6,
+			cell2: 2,
+			cell3: 1,
+			cell4: 1,
+			seconds: 1500,
+			maxSeconds: 15000,
+			vites: false,
+			eFlg: false,
+			angle: 0,
+			angle_next: null,
+			tm_val: 600,
+			start: 0
+		};
+		var config = $.extend(defaults, options);
+		var $elm = $(this);
+		var lastSec = config.maxSeconds - 1000;
+		var c = 0;
+		// 描画初期リセット
+		$elm.empty();
+		//データから渡された値を元にカウントダウンバーを描画
+		// 緑
+		for (var i = 0; i < config.cell1; i++) {
+			$elm.append('<span class="countdown-bar-col01"><span></span></span>');
+		}
+		// 黄
+		for (var i = 0; i < config.cell2; i++) {
+			if (i == 0) {
+				$elm.append('<span class="countdown-bar-col02 is-pin"><span></span></span>');
+			} else {
+				$elm.append('<span class="countdown-bar-col02"><span></span></span>');
+			}
+		}
+		// 橙
+		for (var i = 0; i < config.cell3; i++) {
+			if (i == 0) {
+				$elm.append('<span class="countdown-bar-col03 is-pin"><span></span></span>');
+			} else {
+				$elm.append('<span class="countdown-bar-col03"><span></span></span>');
+			}
+		}
+		// 赤
+		for (var i = 0; i < config.cell4; i++) {
+			if (i == 0) {
+				$elm.append('<span class="countdown-bar-col04 is-pin"><span></span></span>');
+			} else {
+				$elm.append('<span class="countdown-bar-col04"><span></span></span>');
+			}
+		}
+		//    var colbarItem = $elm.children("span").length;
+		var colbarItem = config.cell1 + config.cell2 + config.cell3 + config.cell4;
+		var colbarTimer = config.maxSeconds;
+		var colbarInt = Math.floor(colbarTimer / colbarItem); // 切り捨て
+
+		/*
+		 *	カウントダウン 処理
+		 */
+		function countdown() {
+			c++;
+			// カウントダウン classを付与（カウントダウンごとに色を付ける）
+			$elm.children("span:not(.after):nth-child(" + c + ")").addClass("after");
+		}
+		/*
+		 *	カウントダウン タイマースタート
+		 */
+		function startTimer() {
+			// 設定した時間ごとにカウントダウン処理実行
+			colbarTimerStart = superInterval(countdown, config.seconds);
+		}
+		/*
+		 *	最後のカウントダウン 処理
+		 */
+		function lastCount() {
+			// カウントダウン タイマーリセット
+			lastTimeout.stop();
+			colbarTimerStart.stop();
+			// 最後のカウントダウンを塗る
+			$elm.children("span:not(.after)").addClass("after");
+			$elm.children("span:not(.after):nth-child(" + colbarItem + ")").addClass("after");
+
+			// 最終セル描画後1秒後実行
+			var lastCountFin = superInterval(function () {
+				lastCountFin.stop();
+				// 経過時間をセット
+				var astmTime = config.maxSeconds + config.start;
+				$("#astm").val(astmTime);
+				$("#jscount").val(postTime);
+				ptimer.stop();
+
+				// overlay表示
+				$("body").prepend('<div class="overlay"></div>');
+				// inputをフォーカスできないようdisabledに
+				$('input').each(function(){
+					$(this).prop('disabled', true);
+				});
+				$('input').each(function(){
+					$(this).prop('disabled', false);
+				});
+
+				// 最終ページの場合
+				if (config.eFlg) {
+					// ステップを最大に描画
+					$("#js-step").stepView({
+						width: 60,
+						angle: 360
+					});
+				} else {
+				// eFlgがfalseだった場合
+					// timeup_flgがtrueだった場合
+					if (timeup_flg) {
+						// ステップグラフを指定の角度(angle_next)塗る
+						if(config.angle_next && config.angle_next > 0){
+							$("#js-step").stepView({
+								width: 60,
+								angle: config.angle + config.angle_next
+							});
+						}
+					}
+				}
+
+				// 経過時間が制限時間を超えている場合、外円を360描画
+				if (astmTime >= (config.tm_val * 1000)) {
+					timerStop.stop();
+					timer_stop_flg = true;
+					timeup_flg = true;
+					// 描画
+					$elm = $('#js-timer');
+					$elm.pie();
+					$elm.pie({
+						allpie: 360,
+						endpie: 360,
+						color: "#CCCCCC"
+					});
+				}
+
+				// 描画後1秒後実行
+				var dischkBefore = superInterval(function () {
+					dischkBefore.stop();
+					var dischk = superInterval(function () {
+						$('input').each(function(){
+							if(!$(this).is(':disabled')){
+								dischk.stop();
+								timerStop.stop();
+								colbarTimerStart.stop();
+								//formSubmit処理を実行 (:FNC-009)
+								formSubmit(document.form1);
+							}
+						});
+					}, 100);
+				}, 900);
+			}, 1000);
+		}
+		// vites以外の場合実行
+		if (!config.vites) {
+			// countdown start
+			startTimer();
+			// 最後のカウントダウン描画の処理
+			lastTimeout = superInterval(lastCount, lastSec);
+		}
+
+	};
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-007
+	 *	機能名：parentChk
+	 *	 
+	 *	親ウィンドウ存在チェック
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.parentChk = function () {
+		/*
+		 *	親ウィンドウ存在チェック
+		 */
+		function checkOpener() {
+			var v_href;
+			var ua = window.navigator.userAgent.toLowerCase();
+
+			// useragentがchromeの場合
+			if (ua.indexOf('chrome') != -1) {
+				// 親ウィンドウがない場合 false
+				if (!window.opener || window.opener.closed) {
+					return false;
+				// 親ウィンドウがある場合 true
+				} else {
+					return true;
+				}
+			// useragentがchrome以外の場合
+			} else {
+				// 親ウィンドウがない場合 false
+				if (!window.opener || window.opener.closed || !Object.keys(window.opener).length) {
+					return false;
+				// 親ウィンドウがある場合 true
+				} else {
+					return true;
+				}
+			}
+			return true;
+		}
+		/*
+		 *	親画面チェック.エラーがあった場合ダイアログを出す
+		 */
+		function chkPa() {
+			// 親ウィンドウ存在チェック
+			var pa = checkOpener();
+			// 結果がfalseの場合（エラーの場合）
+			if (!pa) {
+				// loader表示
+				$(".loader").empty();
+				$(".loader").show();
+				// 各タイマーリセット
+				timerStop.stop();
+				colbarTimerStart.stop();
+				ptimer.stop();
+				lastTimeout.stop();
+				clearInterval(paInterval);
+				lastTimeout = null;
+				// ダイアログ表示
+				swal({
+					title: "確認",
+					text: "無効な操作が行なわれました。",
+					type: "warning",
+					showCancelButton: false,
+					confirmButtonColor: "#D0D0D0",
+					confirmButtonText: "OK",
+					closeOnConfirm: true
+				},
+				function () {
+					window.close();
+					return false;
+				});
+			}
+		}
+		// 5秒おきにチェック
+		var paInterval = setInterval(chkPa, 5000);
+	};
+
+})(jQuery);
+
+
+(function ($) {
+	"use strict";
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-022
+	 *	機能名：autoHeight
+	 *	 
+	 *	指定エリアの表示エリアの高さを揃える
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *	@requires spi3_jQueryAutoHeight.js
+	 *
+	============================================================== */
+	$(".answer").each(function () {
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+	$(".choice-answer").each(function () {
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+	$(".which-answer").each(function () {
+		$(this).find(".jq-autoheight").autoHeight();
+	});
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-021
+	 *	機能名：vites
+	 *	 
+	 *	VITES画面の表示・遷移処理
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	$.fn.vites = function (options) {
+		// パラメータセット
+		var defaults = {
+			v: {},
+			firstFlg: false,
+			os: "win",
+		};
+		var config = $.extend(defaults, options);
+
+		var $self = $(this);
+
+		var num = Object.keys(config.v).length;
+		var max = num;
+		var current = 1;
+		// 画面読み込み時
+		$(window).load(function () {
+			// 画面サイズチェック（FNC-006）
+			winSizeChk(config.firstFlg, config.os);
+		});
+		/*
+		 * 初期処理
+		 */
+		var init = function () {
+			// 最初の画面をactiveにする
+			$(".vites_list").eq(0).addClass("active");
+			// ページ表示設定処理
+			checkPage(0);
+		}
+		/*
+		 * リセット処理
+		 */
+		var reset = function () {
+			// 回答済みclassをリセット
+			$(".is-end").removeClass("is-end");
+			// form内容をリセット
+			$("form").each(function () {
+				$(this)[0].reset();
+			});
+		}
+		/*
+		 * ページ表示設定処理
+		 */
+		var checkPage = function (c) {
+			// paging表示
+			var page = '<span class="page1">' + config.v[c].num + '</span>／<span class="page2">' + config.v[c].max + '</span>';
+			$(".paging").html(page);
+			// ページ数が複数の場合
+			if (num > 1) {
+				// 最初のページの場合
+				if (current == 1) {
+					$(".paging-next").show();
+					$(".paging-prev").hide();
+				// 最終ページの場合
+				} else if (current == max) {
+					$(".paging-next").hide();
+					$(".paging-prev").show();
+				// それ以外の場合
+				} else {
+					$(".paging-next").show();
+					$(".paging-prev").show();
+				}
+			// ページ数が1件の場合
+			} else {
+				$(".paging-prev").hide();
+				$(".paging-next").hide();
+			}
+			// タブ画面の場合
+			$(".tab-contents").each(function () {
+				// 最初のタブ要素を表示
+				$(this).find(".tab-contents-item").hide();
+				$(this).find(".tab-contents-item").eq(0).show();
+			});
+			// 各画面の処理
+			$(".wrapper").each(function () {
+				// 最初の画面要素を表示
+				$(this).find(".jq-tab-vites").hide();
+				$(this).find(".jq-tab-vites").eq(0).show();
+			});
+			// タブ画面の場合
+			$(".tab").each(function () {
+				// 最初のタブボタン要素を表示
+				$(this).find(".tab-list-item").children("a").removeClass("is-current");
+				$(this).find(".tab-list-item").eq(0).children("a").addClass("is-current");
+			});
+			// 回答エリアの処理
+			$(".answer").each(function () {
+				// 高さ揃え（FNC-022）
+				$(this).find(".jq-autoheight").autoHeight();
+			});
+		}
+		// 初期処理
+		if (num > 0) {
+			init();
+		}
+		// 次ボタンをクリック時
+		$(".paging-next").on("click", function () {
+			// page表示セット
+			var now = current - 1;
+			var next = now + 1;
+			current = current + 1;
+			$(".vites_list").eq(now).removeClass("active");
+			$(".vites_list").eq(next).addClass("active");
+			// ページ表示設定処理
+			checkPage(next);
+			// リセット処理
+			reset();
+			return false;
+		});
+		// 前ボタンをクリック時
+		$(".paging-prev").on("click", function () {
+			// page表示セット
+			var now = current - 1;
+			var next = now - 1;
+			if (next < 0) {
+				next = 0;
+			}
+			current = current - 1;
+			if (current < 0) {
+				current = 0;
+			}
+			$(".vites_list").eq(now).removeClass("active");
+			$(".vites_list").eq(next).addClass("active");
+			// ページ表示設定処理
+			checkPage(next);
+			// リセット処理
+			reset();
+			return false;
+		});
+	};
+
+})(jQuery);

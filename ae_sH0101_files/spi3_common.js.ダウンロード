@@ -1,0 +1,89 @@
+$(function(){
+"use strict";
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-001
+	 *	機能名：keyCheck
+	 *	 
+	 *	キーボード入力制御を行う
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *	@requires spi3_plugin_win.js
+	 *	@requires spi3_plugin_mac.js
+	 *
+	============================================================== */
+	$(document).keyCheck();
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-002
+	 *	機能名：window close
+	 *	 
+	 *	ボタン（.js-close）押下時にウィンドウを閉じる。
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	// 閉じるボタン押下時
+	$(".js-close").on('click',function(){
+		window.close();
+		return false;
+	});
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-004
+	 *	機能名：独自タグの変換
+	 *	 
+	 *	テキストデータに「独自タグ」があった場合、指定のコードに変換する。
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	/*
+	 *  b -> "["
+	 */
+	$('b').replaceWith(function() {
+		$(this).replaceWith("［"+$(this).text()+"］");
+	});
+	/*
+	 *  f -> 太字
+	 */
+	var str = document.body.innerHTML;
+	var strf = str.match(/<f>(.*?)f>/g);
+	if(strf){
+		for(var i=0;i<strf.length;i++){
+			str = str.replace(/<f>/g,'<b>');
+			str = str.replace(/<\-f>/g,'</b>');
+			str = str.replace(/\&lt\;-f\&gt\;/g,'</b>');
+			str = str.replace(/<\/f>/g,'</b>');
+		}
+		document.body.innerHTML = str;
+	}
+
+
+	/* ============================================================
+	 *
+	 *	機能ID:FNC-027
+	 *	機能名：ENTER key制御
+	 *	 
+	 *	input入力フォーム中にenter keyは無効とする
+	 *
+	 *	@requires spi3_jquery-1.11.2.min.js
+	 *
+	============================================================== */
+	/*
+	 *  input入力フォーム中にenter keyは無効とする
+	 */
+	$("input,select,button").keypress(function (ev) {
+		// enter keyを押された場合、return false
+		if ((ev.which && ev.which === 13) || (ev.keyCode && ev.keyCode === 13)) {
+			return false;
+		// それ以外は、処理継続
+		} else {
+			return true;
+		}
+	});
+
+});
